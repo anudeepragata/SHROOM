@@ -28,6 +28,8 @@ definition modeling, paraphrasing and machine translation.
 
  3. ModelCard.py - Is a foundational GUI that lets the user choose between Score-based clustering and the Siamese network to predict if the given source, hypothesis and target display signs of hallucination.
 
+ 4. prompting.py - Consists of the training of LLAMA2 to distinguish between example pairs and further narrow it's responses down to a HalluScore - representational of a self-consistency based prompting loop.
+
  ## Usage
 
 Install all dependencies
