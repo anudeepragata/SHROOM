@@ -307,10 +307,13 @@ if train_models:
         evaluation_steps=500,
     )
 
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix
+
+
 def sbert_inference(file_path,model):
     with open(file_path, 'r') as file:
         data = json.load(file)
-
+    print(len(data))
     y_true = []
     y_pred = []
     metrics_by_task = {}
@@ -321,7 +324,11 @@ def sbert_inference(file_path,model):
             metrics_by_task[task] = {"y_true": [], "y_pred": []}
 
         hyp = [example["hyp"]]
-        tgt = [example["tgt"]]
+        if task=="PG":
+            tgt=example["src"]
+        else:
+            tgt = example["tgt"]
+
         label = example["label"]
         embeddings1 = model.encode(hyp, convert_to_tensor=True)
         embeddings2 = model.encode(tgt, convert_to_tensor=True)
@@ -341,11 +348,13 @@ def sbert_inference(file_path,model):
     precision = precision_score(y_true, y_pred, pos_label="Hallucination")
     recall = recall_score(y_true, y_pred, pos_label="Hallucination")
     f1 = f1_score(y_true, y_pred, pos_label="Hallucination")
+    cm = confusion_matrix(y_true, y_pred, labels=["Hallucination", "Not Hallucination"])
+
     
     overall_metrics={ "accuracy": accuracy,
         "precision": precision,
         "recall": recall,
-        "f1": f1}
+        "f1": f1,"cm":cm.tolist()}
 
     task_metrics = {}
     for task, metrics in metrics_by_task.items():
@@ -355,17 +364,22 @@ def sbert_inference(file_path,model):
         precision = precision_score(y_true, y_pred, pos_label="Hallucination")
         recall = recall_score(y_true, y_pred, pos_label="Hallucination")
         f1 = f1_score(y_true, y_pred, pos_label="Hallucination")
+        cm = confusion_matrix(y_true, y_pred, labels=["Hallucination", "Not Hallucination"])
+
         task_metrics[task] = {
             "accuracy": accuracy,
             "precision": precision,
             "recall": recall,
-            "f1": f1
+            "f1": f1,
+            "cf": cm.tolist()
         }
 
     return {
         "overall metrics": overall_metrics,
         "task metrics": task_metrics
     }
+
+
 
 def shroom_inference(file_path,model):
     with open(file_path, 'r') as file:
@@ -381,7 +395,10 @@ def shroom_inference(file_path,model):
             metrics_by_task[task] = {"y_true": [], "y_pred": []}
 
         hyp = example["hyp"]
-        tgt = example["tgt"]
+        if task=="PG":
+            tgt=example["src"]
+        else:
+            tgt = example["tgt"]
         label = example["label"]
 
         sentence1, sentence2 = encode_pair([hyp, tgt])
@@ -400,11 +417,15 @@ def shroom_inference(file_path,model):
     precision = precision_score(y_true, y_pred, pos_label="Hallucination")
     recall = recall_score(y_true, y_pred, pos_label="Hallucination")
     f1 = f1_score(y_true, y_pred, pos_label="Hallucination")
+    cm = confusion_matrix(y_true, y_pred, labels=["Hallucination", "Not Hallucination"])
+
     
     overall_metrics={ "accuracy": accuracy,
         "precision": precision,
         "recall": recall,
-        "f1": f1}
+        "f1": f1,
+        "cm":cm.tolist()
+}
 
     task_metrics = {}
     for task, metrics in metrics_by_task.items():
@@ -414,11 +435,14 @@ def shroom_inference(file_path,model):
         precision = precision_score(y_true, y_pred, pos_label="Hallucination")
         recall = recall_score(y_true, y_pred, pos_label="Hallucination")
         f1 = f1_score(y_true, y_pred, pos_label="Hallucination")
+        cm = confusion_matrix(y_true, y_pred, labels=["Hallucination", "Not Hallucination"])
+
         task_metrics[task] = {
             "accuracy": accuracy,
             "precision": precision,
             "recall": recall,
-            "f1": f1
+            "f1": f1,
+            "cm":cm.tolist()
         }
 
     return {
@@ -426,22 +450,30 @@ def shroom_inference(file_path,model):
         "task metrics": task_metrics
     }
 
-'''Evaluating ShroomForwardFormer'''
+
+outputs = {}
+
+# Evaluating ShroomForwardFormer
 print("\n ShroomForwardFormer")
 state_dict = torch.load("best_model_v2_lr1.pth")
-model=ShroomForwardFormer(256)
+model = ShroomForwardFormer(256)
 model.load_state_dict(state_dict)
-print(shroom_inference("trial-v1.json",model))
+outputs["ShroomForwardFormer"] = shroom_inference("test.model-aware.json", model)
 
-'''Evaluating SentenceBert'''
+# Evaluating SentenceBert
 print("\n SenntenceTransformer Pretrained")
 model = SentenceTransformer("distilbert-base-nli-mean-tokens")
 model.load_state_dict(torch.load("model_senbert.pth"))
-print(sbert_inference("trial-v1.json",model))
+outputs["SentenceBert"] = sbert_inference("test.model-aware.json", model)
 
-'''Evaluating ShroomFormerV2'''
+# Evaluating ShroomFormerV2
 print("\n ShroomFormerV2")
 state_dict = torch.load("model_v2_lr1.pth")
-model=  ShroomformerV2()
+model = ShroomformerV2()
 model.load_state_dict(state_dict)
-print(shroom_inference("trial-v1.json",model))
+outputs["ShroomFormerV2"] = shroom_inference("test.model-aware.json", model)
+
+with open("inference_outputs.json", "w") as f:
+    json.dump(outputs, f, indent=4)
+
+print("Outputs saved to inference_outputs.json")
